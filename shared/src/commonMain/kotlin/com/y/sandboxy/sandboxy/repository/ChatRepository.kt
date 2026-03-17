@@ -11,13 +11,12 @@ import com.y.sandboxy.sandboxy.model.ChatMessage
 import com.y.sandboxy.sandboxy.model.LlmModel
 import com.y.sandboxy.sandboxy.model.LlmParams
 import com.y.sandboxy.sandboxy.model.MessageRole
+import com.y.sandboxy.sandboxy.model.ResponseStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.collectIndexed
+
 
 class ChatRepository(private val clientProvider: LlmClientProvider) {
-
-    private val systemPrompt = "You are a helpful AI assistant."
 
     fun sendMessageStreaming(
         messages: List<ChatMessage>,
@@ -26,15 +25,21 @@ class ChatRepository(private val clientProvider: LlmClientProvider) {
     ): Flow<String> = flow {
         val contextMessages = trimToContextWindow(messages, params.contextWindowLimit)
 
+        val effectiveSystemPrompt = buildEffectiveSystemPrompt(params)
+        val stopSeqs = params.stopSequences.filter { it.isNotBlank() }.ifEmpty { null }
+
         val llmParams = OpenRouterParams(
             temperature = params.temperature.toDouble(),
             maxTokens = params.maxTokens,
             topP = params.topP.toDouble(),
             topK = params.topK,
+            stop = stopSeqs,
         )
 
         val chatPrompt = prompt("chat", llmParams) {
-            system(systemPrompt)
+            if (effectiveSystemPrompt.isNotBlank()) {
+                system(effectiveSystemPrompt)
+            }
             contextMessages.forEach { msg ->
                 when (msg.role) {
                     MessageRole.User -> user(msg.content)
@@ -77,6 +82,14 @@ class ChatRepository(private val clientProvider: LlmClientProvider) {
                 else -> { /* ignore tool calls, reasoning, etc. */ }
             }
         }
+    }
+
+    private fun buildEffectiveSystemPrompt(params: LlmParams): String {
+        val base = params.systemPrompt.trim()
+        val suffix = params.responseStyle.suffix
+        return if (suffix.isEmpty()) base
+        else if (base.isEmpty()) suffix
+        else "$base\n\n$suffix"
     }
 
     private fun trimToContextWindow(
