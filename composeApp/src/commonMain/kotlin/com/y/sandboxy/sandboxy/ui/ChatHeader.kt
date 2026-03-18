@@ -20,7 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.y.sandboxy.sandboxy.AppMode
 import com.y.sandboxy.sandboxy.model.AvailableModels
 import com.y.sandboxy.sandboxy.model.LlmModel
 
@@ -30,6 +32,8 @@ fun ChatHeader(
     onModelSelected: (LlmModel) -> Unit,
     onSettingsClick: () -> Unit,
     onClearClick: () -> Unit,
+    onModeToggle: () -> Unit,
+    currentMode: AppMode,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -45,21 +49,81 @@ fun ChatHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            ModelDropdown(
-                selectedModel = selectedModel,
-                onModelSelected = onModelSelected,
-            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(onClick = onSettingsClick) {
-                    Text("⚙", style = MaterialTheme.typography.titleMedium)
+                // Mode toggle
+                ModeToggle(
+                    currentMode = currentMode,
+                    onToggle = onModeToggle,
+                )
+
+                if (currentMode == AppMode.Chat) {
+                    ModelDropdown(
+                        selectedModel = selectedModel,
+                        onModelSelected = onModelSelected,
+                    )
                 }
-                IconButton(onClick = onClearClick) {
-                    Text("🗑", style = MaterialTheme.typography.titleMedium)
+            }
+            if (currentMode == AppMode.Chat) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    IconButton(onClick = onSettingsClick) {
+                        Text("⚙", style = MaterialTheme.typography.titleMedium)
+                    }
+                    IconButton(onClick = onClearClick) {
+                        Text("🗑", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ModeToggle(
+    currentMode: AppMode,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Row(modifier = Modifier.padding(2.dp)) {
+            ModeTab(
+                label = "Chat",
+                selected = currentMode == AppMode.Chat,
+                onClick = { if (currentMode != AppMode.Chat) onToggle() },
+            )
+            ModeTab(
+                label = "Testing",
+                selected = currentMode == AppMode.Testing,
+                onClick = { if (currentMode != AppMode.Testing) onToggle() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.extraSmall,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

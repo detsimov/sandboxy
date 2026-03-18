@@ -84,146 +84,159 @@ fun SettingsPanel(
                 )
                 Spacer(Modifier.height(24.dp))
 
-                // Section: Model Parameters
-                Text(
-                    text = "Model Parameters",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                SettingsPanelContent(
+                    params = params,
+                    onParamsChange = onParamsChange,
+                    onReset = onReset,
                 )
-                Spacer(Modifier.height(12.dp))
-
-                ParamSlider(
-                    label = "Temperature",
-                    value = params.temperature,
-                    range = 0f..2f,
-                    steps = 19,
-                    format = { formatFloat(it, 1) },
-                    onValueChange = { onParamsChange(params.copy(temperature = it)) },
-                )
-
-                ParamSlider(
-                    label = "Top-K",
-                    value = params.topK.toFloat(),
-                    range = 0f..100f,
-                    steps = 99,
-                    format = { it.roundToInt().toString() },
-                    onValueChange = { onParamsChange(params.copy(topK = it.roundToInt())) },
-                )
-
-                ParamSlider(
-                    label = "Top-P",
-                    value = params.topP,
-                    range = 0f..1f,
-                    steps = 19,
-                    format = { formatFloat(it, 2) },
-                    onValueChange = { onParamsChange(params.copy(topP = it)) },
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(16.dp))
-
-                // Section: Generation Limits
-                Text(
-                    text = "Generation Limits",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                ParamSlider(
-                    label = "Max Tokens",
-                    value = params.maxTokens.toFloat(),
-                    range = 256f..16384f,
-                    steps = 62,
-                    format = { it.roundToInt().toString() },
-                    onValueChange = { onParamsChange(params.copy(maxTokens = it.roundToInt())) },
-                )
-
-                ParamSlider(
-                    label = "Context Window",
-                    value = params.contextWindowLimit.toFloat(),
-                    range = 2f..50f,
-                    steps = 47,
-                    format = { "${it.roundToInt()} messages" },
-                    onValueChange = { onParamsChange(params.copy(contextWindowLimit = it.roundToInt())) },
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(16.dp))
-
-                // Section: System Prompt
-                Text(
-                    text = "System Prompt",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                OutlinedTextField(
-                    value = params.systemPrompt,
-                    onValueChange = { onParamsChange(params.copy(systemPrompt = it)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
-                    maxLines = 8,
-                    textStyle = MaterialTheme.typography.bodySmall,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    ),
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(16.dp))
-
-                // Section: Response Style
-                Text(
-                    text = "Response Style",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                ResponseStyleDropdown(
-                    selected = params.responseStyle,
-                    onSelect = { onParamsChange(params.copy(responseStyle = it)) },
-                )
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(16.dp))
-
-                // Section: Stop Sequences
-                Text(
-                    text = "Stop Sequences",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Generation stops before these strings (max 4)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-
-                StopSequencesEditor(
-                    sequences = params.stopSequences,
-                    onSequencesChange = { onParamsChange(params.copy(stopSequences = it)) },
-                )
-
-                Spacer(Modifier.height(24.dp))
-
-                OutlinedButton(
-                    onClick = onReset,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Reset to Defaults")
-                }
             }
         }
+    }
+}
+
+@Composable
+fun SettingsPanelContent(
+    params: LlmParams,
+    onParamsChange: (LlmParams) -> Unit,
+    onReset: () -> Unit,
+) {
+    // Section: Model Parameters
+    Text(
+        text = "Model Parameters",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    ParamSlider(
+        label = "Temperature",
+        value = params.temperature,
+        range = 0f..2f,
+        steps = 19,
+        format = { formatFloat(it, 1) },
+        onValueChange = { onParamsChange(params.copy(temperature = it)) },
+    )
+
+    ParamSlider(
+        label = "Top-K",
+        value = params.topK.toFloat(),
+        range = 0f..100f,
+        steps = 99,
+        format = { it.roundToInt().toString() },
+        onValueChange = { onParamsChange(params.copy(topK = it.roundToInt())) },
+    )
+
+    ParamSlider(
+        label = "Top-P",
+        value = params.topP,
+        range = 0f..1f,
+        steps = 19,
+        format = { formatFloat(it, 2) },
+        onValueChange = { onParamsChange(params.copy(topP = it)) },
+    )
+
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(16.dp))
+
+    // Section: Generation Limits
+    Text(
+        text = "Generation Limits",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    ParamSlider(
+        label = "Max Tokens",
+        value = params.maxTokens.toFloat(),
+        range = 256f..16384f,
+        steps = 62,
+        format = { it.roundToInt().toString() },
+        onValueChange = { onParamsChange(params.copy(maxTokens = it.roundToInt())) },
+    )
+
+    ParamSlider(
+        label = "Context Window",
+        value = params.contextWindowLimit.toFloat(),
+        range = 2f..50f,
+        steps = 47,
+        format = { "${it.roundToInt()} messages" },
+        onValueChange = { onParamsChange(params.copy(contextWindowLimit = it.roundToInt())) },
+    )
+
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(16.dp))
+
+    // Section: System Prompt
+    Text(
+        text = "System Prompt",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    OutlinedTextField(
+        value = params.systemPrompt,
+        onValueChange = { onParamsChange(params.copy(systemPrompt = it)) },
+        modifier = Modifier.fillMaxWidth(),
+        minLines = 4,
+        maxLines = 8,
+        textStyle = MaterialTheme.typography.bodySmall,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        ),
+    )
+
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(16.dp))
+
+    // Section: Response Style
+    Text(
+        text = "Response Style",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    ResponseStyleDropdown(
+        selected = params.responseStyle,
+        onSelect = { onParamsChange(params.copy(responseStyle = it)) },
+    )
+
+    Spacer(Modifier.height(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Spacer(Modifier.height(16.dp))
+
+    // Section: Stop Sequences
+    Text(
+        text = "Stop Sequences",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "Generation stops before these strings (max 4)",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    StopSequencesEditor(
+        sequences = params.stopSequences,
+        onSequencesChange = { onParamsChange(params.copy(stopSequences = it)) },
+    )
+
+    Spacer(Modifier.height(24.dp))
+
+    OutlinedButton(
+        onClick = onReset,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Reset to Defaults")
     }
 }
 

@@ -9,12 +9,19 @@ import com.y.sandboxy.sandboxy.model.ChatMessage
 import com.y.sandboxy.sandboxy.model.LlmModel
 import com.y.sandboxy.sandboxy.model.LlmParams
 import com.y.sandboxy.sandboxy.model.MessageRole
+import com.y.sandboxy.sandboxy.model.StreamChunk
+import com.y.sandboxy.sandboxy.model.UsageMetrics
 import com.y.sandboxy.sandboxy.repository.ChatRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+
+data class PendingDelete(
+    val message: ChatMessage,
+    val originalIndex: Int,
+)
 
 class ChatState {
     val messages = mutableStateListOf<ChatMessage>()
@@ -29,6 +36,7 @@ class ChatState {
 
     var errorMessage by mutableStateOf<String?>(null)
     var lastUserMessageText by mutableStateOf<String?>(null)
+    var metrics by mutableStateOf(UsageMetrics())
 
     private var streamingJob: Job? = null
     private var currentStreamingMessageId: String? = null
@@ -55,10 +63,14 @@ class ChatState {
         currentStreamingMessageId = assistantMessage.id
         isStreaming = true
         isTyping = true
+        metrics = UsageMetrics()
+
+        val startTime = currentTimeMillis()
+        var firstTokenTime: Long? = null
 
         streamingJob = scope.launch {
             var receivedFirstToken = false
-            repository.sendMessageStreaming(
+            repository.sendMessageStreamingWithUsage(
                 messages = messages.filter { it.id != assistantMessage.id }.toList(),
                 model = selectedModel,
                 params = params,
@@ -70,11 +82,26 @@ class ChatState {
                     errorMessage = e.message ?: "Unknown error occurred"
                 }
             }.collect { chunk ->
-                if (!receivedFirstToken) {
-                    receivedFirstToken = true
-                    isTyping = false
+                when (chunk) {
+                    is StreamChunk.TextDelta -> {
+                        if (!receivedFirstToken) {
+                            receivedFirstToken = true
+                            firstTokenTime = currentTimeMillis()
+                            isTyping = false
+                        }
+                        appendToStreamingMessage(assistantMessage.id, chunk.text)
+                    }
+                    is StreamChunk.Usage -> {
+                        val endTime = currentTimeMillis()
+                        metrics = UsageMetrics(
+                            inputTokens = chunk.inputTokens,
+                            outputTokens = chunk.outputTokens,
+                            totalTokens = chunk.totalTokens,
+                            timeToFirstTokenMs = firstTokenTime?.let { it - startTime },
+                            totalTimeMs = endTime - startTime,
+                        )
+                    }
                 }
-                appendToStreamingMessage(assistantMessage.id, chunk)
             }
 
             finalizeStreamingMessage(assistantMessage.id)
@@ -120,6 +147,32 @@ class ChatState {
         }
     }
 
+    // Soft-delete: stores removed message for undo
+    var pendingDelete by mutableStateOf<PendingDelete?>(null)
+        private set
+
+    fun softDeleteMessage(id: String) {
+        // Commit any existing pending delete first
+        commitPendingDelete()
+
+        val index = messages.indexOfFirst { it.id == id }
+        if (index == -1) return
+        val message = messages[index]
+        messages.removeAt(index)
+        pendingDelete = PendingDelete(message, index)
+    }
+
+    fun undoPendingDelete() {
+        val pending = pendingDelete ?: return
+        val insertIndex = pending.originalIndex.coerceAtMost(messages.size)
+        messages.add(insertIndex, pending.message)
+        pendingDelete = null
+    }
+
+    fun commitPendingDelete() {
+        pendingDelete = null
+    }
+
     fun deleteMessage(id: String) {
         messages.removeAll { it.id == id }
     }
@@ -132,3 +185,5 @@ class ChatState {
         params = LlmParams()
     }
 }
+
+private fun currentTimeMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()

@@ -12,6 +12,7 @@ import com.y.sandboxy.sandboxy.model.LlmModel
 import com.y.sandboxy.sandboxy.model.LlmParams
 import com.y.sandboxy.sandboxy.model.MessageRole
 import com.y.sandboxy.sandboxy.model.ResponseStyle
+import com.y.sandboxy.sandboxy.model.StreamChunk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -78,6 +79,78 @@ class ChatRepository(private val clientProvider: LlmClientProvider) {
                     if (buffer.isNotEmpty()) {
                         emit(buffer.toString())
                     }
+                }
+                else -> { /* ignore tool calls, reasoning, etc. */ }
+            }
+        }
+    }
+
+    fun sendMessageStreamingWithUsage(
+        messages: List<ChatMessage>,
+        model: LlmModel,
+        params: LlmParams,
+    ): Flow<StreamChunk> = flow {
+        val contextMessages = trimToContextWindow(messages, params.contextWindowLimit)
+
+        val effectiveSystemPrompt = buildEffectiveSystemPrompt(params)
+        val stopSeqs = params.stopSequences.filter { it.isNotBlank() }.ifEmpty { null }
+
+        val llmParams = OpenRouterParams(
+            temperature = params.temperature.toDouble(),
+            maxTokens = params.maxTokens,
+            topP = params.topP.toDouble(),
+            topK = params.topK,
+            stop = stopSeqs,
+        )
+
+        val chatPrompt = prompt("chat", llmParams) {
+            if (effectiveSystemPrompt.isNotBlank()) {
+                system(effectiveSystemPrompt)
+            }
+            contextMessages.forEach { msg ->
+                when (msg.role) {
+                    MessageRole.User -> user(msg.content)
+                    MessageRole.Assistant -> assistant(msg.content)
+                }
+            }
+        }
+
+        val llmModel = LLModel(
+            provider = LLMProvider.OpenRouter,
+            id = model.id,
+            capabilities = listOf(
+                LLMCapability.Temperature,
+                LLMCapability.Completion,
+            )
+        )
+
+        val streamFlow: Flow<StreamFrame> = clientProvider.client.executeStreaming(chatPrompt, llmModel)
+
+        var buffer = StringBuilder()
+        var lastEmitTime = 0L
+
+        streamFlow.collect { frame ->
+            when (frame) {
+                is StreamFrame.TextDelta -> {
+                    buffer.append(frame.text)
+                    val now = currentTimeMillis()
+                    if (now - lastEmitTime >= 16 || buffer.length > 50) {
+                        emit(StreamChunk.TextDelta(buffer.toString()))
+                        buffer = StringBuilder()
+                        lastEmitTime = now
+                    }
+                }
+                is StreamFrame.End -> {
+                    if (buffer.isNotEmpty()) {
+                        emit(StreamChunk.TextDelta(buffer.toString()))
+                    }
+                    emit(
+                        StreamChunk.Usage(
+                            inputTokens = frame.metaInfo.inputTokensCount,
+                            outputTokens = frame.metaInfo.outputTokensCount,
+                            totalTokens = frame.metaInfo.totalTokensCount,
+                        )
+                    )
                 }
                 else -> { /* ignore tool calls, reasoning, etc. */ }
             }

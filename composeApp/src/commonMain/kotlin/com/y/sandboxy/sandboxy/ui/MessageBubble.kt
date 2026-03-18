@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,8 +19,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -33,6 +37,9 @@ fun MessageBubble(
     message: ChatMessage,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    roleLabel: String? = null,
+    showDeleteAction: Boolean = true,
+    onCopy: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -51,51 +58,137 @@ fun MessageBubble(
             .hoverable(interactionSource),
         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
-        Box {
-            Surface(
-                shape = bubbleShape,
-                color = if (isUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                },
-                tonalElevation = if (isUser) 0.dp else 2.dp,
-                modifier = Modifier.widthIn(max = 600.dp),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    if (message.isStreaming && message.content.isEmpty()) {
-                        Text(
-                            text = "…",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                    } else {
-                        MarkdownText(text = message.content)
-                    }
+        Column(
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+        ) {
+            // Role label
+            if (roleLabel != null) {
+                Text(
+                    text = roleLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(
+                        start = if (!isUser) 8.dp else 0.dp,
+                        end = if (isUser) 8.dp else 0.dp,
+                        bottom = 2.dp,
+                    ),
+                )
+            }
 
-                    // Timestamp
-                    val localTime = message.timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
-                    val timeStr = "${localTime.hour.toString().padStart(2, '0')}:${localTime.minute.toString().padStart(2, '0')}"
+            BubbleWithActions(
+                message = message,
+                isUser = isUser,
+                isHovered = isHovered,
+                bubbleShape = bubbleShape,
+                onCopy = onCopy,
+                onDelete = if (showDeleteAction) onDelete else null,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BubbleWithActions(
+    message: ChatMessage,
+    isUser: Boolean,
+    isHovered: Boolean,
+    bubbleShape: RoundedCornerShape,
+    onCopy: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+) {
+    Box {
+        Surface(
+            shape = bubbleShape,
+            color = if (isUser) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
+            tonalElevation = if (isUser) 0.dp else 2.dp,
+            modifier = Modifier.widthIn(max = 600.dp),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                if (message.isStreaming && message.content.isEmpty()) {
+                    TypingDots(modifier = Modifier.padding(vertical = 4.dp))
+                } else {
+                    MarkdownText(text = message.content)
+                }
+
+                // Timestamp
+                val localTime = message.timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
+                val timeStr = "${localTime.hour.toString().padStart(2, '0')}:${localTime.minute.toString().padStart(2, '0')}"
+                Text(
+                    text = timeStr,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(top = 4.dp),
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isHovered,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            MessageActionBar(
+                onCopy = onCopy,
+                onDelete = onDelete,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageActionBar(
+    onCopy: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+) {
+    var showCopyConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showCopyConfirm) {
+        if (showCopyConfirm) {
+            kotlinx.coroutines.delay(2000)
+            showCopyConfirm = false
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = 4.dp,
+        shadowElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onCopy != null) {
+                IconButton(
+                    onClick = {
+                        onCopy()
+                        showCopyConfirm = true
+                    },
+                    modifier = Modifier.size(28.dp),
+                ) {
                     Text(
-                        text = timeStr,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(top = 4.dp),
+                        text = if (showCopyConfirm) "✓" else "⎘",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (showCopyConfirm) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }
-
-            AnimatedVisibility(
-                visible = isHovered,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopEnd),
-            ) {
+            if (onDelete != null) {
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(28.dp),
                 ) {
                     Text(
                         text = "✕",

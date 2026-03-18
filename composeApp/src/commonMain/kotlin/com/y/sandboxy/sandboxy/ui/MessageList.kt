@@ -1,18 +1,21 @@
 package com.y.sandboxy.sandboxy.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,20 +27,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.y.sandboxy.sandboxy.model.ChatMessage
+import com.y.sandboxy.sandboxy.model.MessageRole
 import kotlinx.coroutines.launch
 
 @Composable
 fun MessageList(
     messages: List<ChatMessage>,
     contextWindowLimit: Int,
-    listState: LazyListState,
     onDeleteMessage: (String) -> Unit,
     isTyping: Boolean,
     modifier: Modifier = Modifier,
+    modelName: String = "Assistant",
 ) {
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
+    val scrollState = rememberScrollState()
 
     if (messages.isEmpty() && !isTyping) {
         EmptyStateView(modifier = modifier)
@@ -53,51 +61,54 @@ fun MessageList(
     // Smart auto-scroll: only scroll if user is near the bottom
     val isNearBottom by remember {
         derivedStateOf {
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisible == null || lastVisible.index >= listState.layoutInfo.totalItemsCount - 2
+            val maxScroll = scrollState.maxValue
+            maxScroll == 0 || scrollState.value >= maxScroll - 200
         }
     }
 
     // Show FAB when scrolled up significantly
     val showScrollFab by remember {
         derivedStateOf {
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            val totalItems = listState.layoutInfo.totalItemsCount
-            lastVisible != null && totalItems > 3 && lastVisible.index < totalItems - 3
+            val maxScroll = scrollState.maxValue
+            maxScroll > 0 && scrollState.value < maxScroll - 500
         }
     }
 
     LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
         if (isNearBottom && messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+            scrollState.animateScrollTo(scrollState.maxValue)
         }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            itemsIndexed(messages, key = { _, msg -> msg.id }) { index, message ->
-                if (index == contextDividerIndex) {
-                    ContextDivider()
-                }
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(initialAlpha = 0f) + slideInVertically(initialOffsetY = { it / 4 }),
-                ) {
-                    MessageBubble(
-                        message = message,
-                        onDelete = { onDeleteMessage(message.id) },
-                    )
-                }
-            }
-
-            if (isTyping) {
-                item(key = "typing_indicator") {
-                    TypingIndicator(modifier = Modifier.padding(vertical = 4.dp))
+        SelectionContainer(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                messages.forEachIndexed { index, message ->
+                    if (index == contextDividerIndex) {
+                        ContextDivider()
+                    }
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(
+                            animationSpec = tween(150),
+                        ) + slideInVertically(
+                            initialOffsetY = { 24 },
+                            animationSpec = tween(150),
+                        ),
+                    ) {
+                        MessageBubble(
+                            message = message,
+                            onDelete = { onDeleteMessage(message.id) },
+                            roleLabel = if (message.role == MessageRole.User) "You" else modelName,
+                            onCopy = { clipboardManager.setText(AnnotatedString(message.content)) },
+                        )
+                    }
                 }
             }
         }
@@ -106,9 +117,7 @@ fun MessageList(
             visible = showScrollFab,
             onClick = {
                 scope.launch {
-                    if (messages.isNotEmpty()) {
-                        listState.animateScrollToItem(messages.lastIndex)
-                    }
+                    scrollState.animateScrollTo(scrollState.maxValue)
                 }
             },
             modifier = Modifier

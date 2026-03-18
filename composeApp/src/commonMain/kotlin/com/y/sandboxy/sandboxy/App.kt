@@ -1,6 +1,5 @@
 package com.y.sandboxy.sandboxy
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
@@ -18,28 +16,37 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.y.sandboxy.sandboxy.agent.LlmClientProvider
 import com.y.sandboxy.sandboxy.repository.ChatRepository
 import com.y.sandboxy.sandboxy.state.ChatState
+import com.y.sandboxy.sandboxy.state.TestingState
 import com.y.sandboxy.sandboxy.theme.SandboxyTheme
 import com.y.sandboxy.sandboxy.ui.ChatHeader
 import com.y.sandboxy.sandboxy.ui.ChatInput
 import com.y.sandboxy.sandboxy.ui.ClearChatDialog
 import com.y.sandboxy.sandboxy.ui.MessageList
+import com.y.sandboxy.sandboxy.ui.MetricsBar
 import com.y.sandboxy.sandboxy.ui.SettingsPanel
+import com.y.sandboxy.sandboxy.ui.TestingScreen
 import kotlinx.coroutines.launch
+
+enum class AppMode { Chat, Testing }
 
 @Composable
 fun App() {
     SandboxyTheme {
-        val state = remember { ChatState() }
+        val chatState = remember { ChatState() }
+        val testingState = remember { TestingState() }
+        var appMode by remember { mutableStateOf(AppMode.Chat) }
         val scope = rememberCoroutineScope()
-        val listState = rememberLazyListState()
         val snackbarHostState = remember { SnackbarHostState() }
 
         val apiKey = remember { getEnvVariable("OPENROUTER_API_KEY") }
@@ -49,7 +56,7 @@ fun App() {
 
         LaunchedEffect(apiKey) {
             if (apiKey.isNullOrBlank()) {
-                state.apiKeyAvailable = false
+                chatState.apiKeyAvailable = false
                 snackbarHostState.showSnackbar(
                     message = "OpenRouter API key not configured. Set OPENROUTER_API_KEY in your environment or .env file.",
                     duration = SnackbarDuration.Indefinite,
@@ -57,18 +64,33 @@ fun App() {
             }
         }
 
-        // Show error snackbar when errorMessage changes
-        LaunchedEffect(state.errorMessage) {
-            val error = state.errorMessage ?: return@LaunchedEffect
+        // Show undo snackbar when a message is soft-deleted
+        LaunchedEffect(chatState.pendingDelete) {
+            val pending = chatState.pendingDelete ?: return@LaunchedEffect
+            val result = snackbarHostState.showSnackbar(
+                message = "Message deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                chatState.undoPendingDelete()
+            } else {
+                chatState.commitPendingDelete()
+            }
+        }
+
+        // Show error snackbar when errorMessage changes (chat mode)
+        LaunchedEffect(chatState.errorMessage) {
+            val error = chatState.errorMessage ?: return@LaunchedEffect
             val result = snackbarHostState.showSnackbar(
                 message = error,
                 actionLabel = "Retry",
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed && repository != null) {
-                state.retryLastMessage(repository, scope)
+                chatState.retryLastMessage(repository, scope)
             }
-            state.errorMessage = null
+            chatState.errorMessage = null
         }
 
         Scaffold(
@@ -91,63 +113,96 @@ fun App() {
                     .padding(paddingValues),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        ChatHeader(
-                            selectedModel = state.selectedModel,
-                            onModelSelected = { state.selectedModel = it },
-                            onSettingsClick = { state.showSettings = !state.showSettings },
-                            onClearClick = { state.showClearDialog = true },
-                            modifier = Modifier.widthIn(max = 768.dp),
-                        )
+                when (appMode) {
+                    AppMode.Chat -> {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                ChatHeader(
+                                    selectedModel = chatState.selectedModel,
+                                    onModelSelected = { chatState.selectedModel = it },
+                                    onSettingsClick = { chatState.showSettings = !chatState.showSettings },
+                                    onClearClick = { chatState.showClearDialog = true },
+                                    onModeToggle = { appMode = AppMode.Testing },
+                                    currentMode = AppMode.Chat,
+                                    modifier = Modifier.widthIn(max = 768.dp),
+                                )
 
-                        MessageList(
-                            messages = state.messages.toList(),
-                            contextWindowLimit = state.params.contextWindowLimit,
-                            listState = listState,
-                            onDeleteMessage = { id -> state.deleteMessage(id) },
-                            isTyping = state.isTyping,
-                            modifier = Modifier
-                                .weight(1f)
-                                .widthIn(max = 768.dp),
-                        )
+                                MessageList(
+                                    messages = chatState.messages.toList(),
+                                    contextWindowLimit = chatState.params.contextWindowLimit,
+                                    onDeleteMessage = { id -> chatState.softDeleteMessage(id) },
+                                    isTyping = chatState.isTyping,
+                                    modelName = chatState.selectedModel.name,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .widthIn(max = 768.dp),
+                                )
 
-                        ChatInput(
-                            text = state.inputText,
-                            onTextChange = { state.inputText = it },
-                            onSend = {
-                                if (repository != null) {
-                                    state.sendMessageStreaming(repository, scope)
-                                }
-                            },
-                            onStop = { state.cancelStreaming() },
-                            isStreaming = state.isStreaming,
-                            enabled = state.apiKeyAvailable,
-                            modifier = Modifier.widthIn(max = 768.dp),
-                        )
+                                MetricsBar(
+                                    metrics = chatState.metrics,
+                                    isStreaming = chatState.isStreaming,
+                                    modifier = Modifier.widthIn(max = 768.dp),
+                                )
+
+                                ChatInput(
+                                    text = chatState.inputText,
+                                    onTextChange = { chatState.inputText = it },
+                                    onSend = {
+                                        if (repository != null) {
+                                            chatState.sendMessageStreaming(repository, scope)
+                                        }
+                                    },
+                                    onStop = { chatState.cancelStreaming() },
+                                    isStreaming = chatState.isStreaming,
+                                    enabled = chatState.apiKeyAvailable,
+                                    modifier = Modifier.widthIn(max = 768.dp),
+                                )
+                            }
+
+                            SettingsPanel(
+                                visible = chatState.showSettings,
+                                params = chatState.params,
+                                onParamsChange = { chatState.params = it },
+                                onReset = { chatState.resetParams() },
+                            )
+                        }
                     }
 
-                    SettingsPanel(
-                        visible = state.showSettings,
-                        params = state.params,
-                        onParamsChange = { state.params = it },
-                        onReset = { state.resetParams() },
-                    )
+                    AppMode.Testing -> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            ChatHeader(
+                                selectedModel = chatState.selectedModel,
+                                onModelSelected = {},
+                                onSettingsClick = {},
+                                onClearClick = {},
+                                onModeToggle = { appMode = AppMode.Chat },
+                                currentMode = AppMode.Testing,
+                            )
+
+                            TestingScreen(
+                                state = testingState,
+                                repository = repository,
+                                scope = scope,
+                                enabled = chatState.apiKeyAvailable,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
                 }
             }
 
-            if (state.showClearDialog) {
+            if (chatState.showClearDialog) {
                 ClearChatDialog(
                     onConfirm = {
-                        state.clearMessages()
-                        state.showClearDialog = false
+                        chatState.clearMessages()
+                        chatState.showClearDialog = false
                     },
-                    onDismiss = { state.showClearDialog = false },
+                    onDismiss = { chatState.showClearDialog = false },
                 )
             }
         }

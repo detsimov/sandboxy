@@ -23,14 +23,23 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun TypingIndicator(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition()
-    val dotColor = MaterialTheme.colorScheme.onSurfaceVariant
-
     Row(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        TypingDots()
+    }
+}
+
+@Composable
+fun TypingDots(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition()
+    val dotColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
