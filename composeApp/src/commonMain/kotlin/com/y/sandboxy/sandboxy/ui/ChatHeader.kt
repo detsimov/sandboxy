@@ -32,7 +32,7 @@ fun ChatHeader(
     onModelSelected: (LlmModel) -> Unit,
     onSettingsClick: () -> Unit,
     onClearClick: () -> Unit,
-    onModeToggle: () -> Unit,
+    onModeChange: (AppMode) -> Unit,
     currentMode: AppMode,
     modifier: Modifier = Modifier,
 ) {
@@ -56,7 +56,7 @@ fun ChatHeader(
                 // Mode toggle
                 ModeToggle(
                     currentMode = currentMode,
-                    onToggle = onModeToggle,
+                    onModeChange = onModeChange,
                 )
 
                 if (currentMode == AppMode.Chat) {
@@ -85,23 +85,20 @@ fun ChatHeader(
 @Composable
 private fun ModeToggle(
     currentMode: AppMode,
-    onToggle: () -> Unit,
+    onModeChange: (AppMode) -> Unit,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         shape = MaterialTheme.shapes.small,
     ) {
         Row(modifier = Modifier.padding(2.dp)) {
-            ModeTab(
-                label = "Chat",
-                selected = currentMode == AppMode.Chat,
-                onClick = { if (currentMode != AppMode.Chat) onToggle() },
-            )
-            ModeTab(
-                label = "Testing",
-                selected = currentMode == AppMode.Testing,
-                onClick = { if (currentMode != AppMode.Testing) onToggle() },
-            )
+            AppMode.entries.forEach { mode ->
+                ModeTab(
+                    label = mode.name,
+                    selected = currentMode == mode,
+                    onClick = { if (currentMode != mode) onModeChange(mode) },
+                )
+            }
         }
     }
 }

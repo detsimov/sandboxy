@@ -35,6 +35,8 @@ class ChatRepository(private val clientProvider: LlmClientProvider) {
             topP = params.topP.toDouble(),
             topK = params.topK,
             stop = stopSeqs,
+            frequencyPenalty = params.frequencyPenalty.toDouble().takeIf { it != 0.0 },
+            presencePenalty = params.presencePenalty.toDouble().takeIf { it != 0.0 },
         )
 
         val chatPrompt = prompt("chat", llmParams) {
@@ -101,6 +103,8 @@ class ChatRepository(private val clientProvider: LlmClientProvider) {
             topP = params.topP.toDouble(),
             topK = params.topK,
             stop = stopSeqs,
+            frequencyPenalty = params.frequencyPenalty.toDouble().takeIf { it != 0.0 },
+            presencePenalty = params.presencePenalty.toDouble().takeIf { it != 0.0 },
         )
 
         val chatPrompt = prompt("chat", llmParams) {

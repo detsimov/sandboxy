@@ -27,24 +27,27 @@ import androidx.compose.ui.unit.dp
 import com.y.sandboxy.sandboxy.agent.LlmClientProvider
 import com.y.sandboxy.sandboxy.repository.ChatRepository
 import com.y.sandboxy.sandboxy.state.ChatState
+import com.y.sandboxy.sandboxy.state.ExperimentState
 import com.y.sandboxy.sandboxy.state.TestingState
 import com.y.sandboxy.sandboxy.theme.SandboxyTheme
 import com.y.sandboxy.sandboxy.ui.ChatHeader
 import com.y.sandboxy.sandboxy.ui.ChatInput
 import com.y.sandboxy.sandboxy.ui.ClearChatDialog
+import com.y.sandboxy.sandboxy.ui.ExperimentScreen
 import com.y.sandboxy.sandboxy.ui.MessageList
 import com.y.sandboxy.sandboxy.ui.MetricsBar
 import com.y.sandboxy.sandboxy.ui.SettingsPanel
 import com.y.sandboxy.sandboxy.ui.TestingScreen
 import kotlinx.coroutines.launch
 
-enum class AppMode { Chat, Testing }
+enum class AppMode { Chat, Testing, Experiments }
 
 @Composable
 fun App() {
     SandboxyTheme {
         val chatState = remember { ChatState() }
         val testingState = remember { TestingState() }
+        val experimentState = remember { ExperimentState() }
         var appMode by remember { mutableStateOf(AppMode.Chat) }
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
@@ -127,7 +130,7 @@ fun App() {
                                     onModelSelected = { chatState.selectedModel = it },
                                     onSettingsClick = { chatState.showSettings = !chatState.showSettings },
                                     onClearClick = { chatState.showClearDialog = true },
-                                    onModeToggle = { appMode = AppMode.Testing },
+                                    onModeChange = { appMode = it },
                                     currentMode = AppMode.Chat,
                                     modifier = Modifier.widthIn(max = 768.dp),
                                 )
@@ -180,12 +183,33 @@ fun App() {
                                 onModelSelected = {},
                                 onSettingsClick = {},
                                 onClearClick = {},
-                                onModeToggle = { appMode = AppMode.Chat },
+                                onModeChange = { appMode = it },
                                 currentMode = AppMode.Testing,
                             )
 
                             TestingScreen(
                                 state = testingState,
+                                repository = repository,
+                                scope = scope,
+                                enabled = chatState.apiKeyAvailable,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    AppMode.Experiments -> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            ChatHeader(
+                                selectedModel = chatState.selectedModel,
+                                onModelSelected = {},
+                                onSettingsClick = {},
+                                onClearClick = {},
+                                onModeChange = { appMode = it },
+                                currentMode = AppMode.Experiments,
+                            )
+
+                            ExperimentScreen(
+                                state = experimentState,
                                 repository = repository,
                                 scope = scope,
                                 enabled = chatState.apiKeyAvailable,
